@@ -65,6 +65,9 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
+            # Mengubah nomor urut indeks agar mulai dari 1
+            df.index = df.index + 1
+            
             # Konversi kolom Jumlah ke angka
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
@@ -76,5 +79,4 @@ with tab2:
         else:
             st.info("Belum ada data pengeluaran.")
     except Exception as e:
-        st.error(f"Gagal mengambil data: {e}")
         st.error(f"Gagal mengambil data: {e}")
