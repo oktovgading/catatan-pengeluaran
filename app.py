@@ -65,11 +65,11 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Format tampilan Tanggal agar bersih & mudah dibaca (YYYY-MM-DD HH:MM)
+            # 1. Pastikan kolom Tanggal ditampilkan langsung sebagai teks tanpa konversi waktu
             if "Tanggal" in df.columns:
-                df["Tanggal"] = pd.to_datetime(df["Tanggal"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M")
+                df["Tanggal"] = df["Tanggal"].astype(str)
             
-            # Konversi kolom Jumlah ke angka
+            # 2. Konversi kolom Jumlah ke angka
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
             total = df["Jumlah"].sum()
