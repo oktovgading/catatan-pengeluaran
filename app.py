@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 from datetime import datetime
 
-# Masukkan URL Web App dari Apps Script Langkah 2
+# URL Google Apps Script Anda
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8F7dcFUCMy7Dk-49c-zqV1xxEudo_3zGA_AJvfze3pbrAgQPUleaQbSwEq8TrSlzC/exec"
 
 st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="centered")
@@ -29,8 +29,6 @@ with tab1:
         if submitted:
             if jumlah <= 0:
                 st.warning("Jumlah pengeluaran harus lebih besar dari 0.")
-            elif WEB_APP_URL == "https://script.google.com/macros/s/AKfycby8F7dcFUCMy7Dk-49c-zqV1xxEudo_3zGA_AJvfze3pbrAgQPUleaQbSwEq8TrSlzC/exec":
-                st.error("Ganti WEB_APP_URL dengan URL dari Google Apps Script Anda!")
             else:
                 payload = {
                     "tanggal": tanggal,
@@ -50,27 +48,24 @@ with tab1:
 # --- TAB 2: RIWAYAT DATA ---
 with tab2:
     st.subheader("Riwayat & Total")
-    if WEB_APP_URL != "https://script.google.com/macros/s/AKfycby8F7dcFUCMy7Dk-49c-zqV1xxEudo_3zGA_AJvfze3pbrAgQPUleaQbSwEq8TrSlzC/exec":
-        try:
-            res = requests.get(WEB_APP_URL)
-            data = res.json()
+    try:
+        res = requests.get(WEB_APP_URL)
+        data = res.json()
+        
+        if len(data) > 1:
+            header = data[0]
+            rows = data[1:]
+            df = pd.DataFrame(rows, columns=header)
             
-            if len(data) > 1:
-                header = data[0]
-                rows = data[1:]
-                df = pd.DataFrame(rows, columns=header)
-                
-                # Konversi kolom Jumlah ke angka
-                df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
-                
-                total = df["Jumlah"].sum()
-                st.metric(label="Total Pengeluaran", value=f"Rp {total:,.0f}")
-                
-                st.divider()
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("Belum ada data pengeluaran.")
-        except Exception as e:
-            st.error(f"Gagal mengambil data: {e}")
-    else:
-        st.error("Isi WEB_APP_URL terlebih dahulu di kode kode Python Anda.")
+            # Konversi kolom Jumlah ke angka
+            df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
+            
+            total = df["Jumlah"].sum()
+            st.metric(label="Total Pengeluaran", value=f"Rp {total:,.0f}")
+            
+            st.divider()
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("Belum ada data pengeluaran.")
+    except Exception as e:
+        st.error(f"Gagal mengambil data: {e}")
