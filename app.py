@@ -65,11 +65,7 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # 1. Pastikan kolom Tanggal ditampilkan langsung sebagai teks tanpa konversi waktu
-            if "Tanggal" in df.columns:
-                df["Tanggal"] = df["Tanggal"].astype(str)
-            
-            # 2. Konversi kolom Jumlah ke angka
+            # Konversi kolom Jumlah ke angka
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
             total = df["Jumlah"].sum()
@@ -80,4 +76,5 @@ with tab2:
         else:
             st.info("Belum ada data pengeluaran.")
     except Exception as e:
+        st.error(f"Gagal mengambil data: {e}")
         st.error(f"Gagal mengambil data: {e}")
