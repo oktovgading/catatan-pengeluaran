@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-# Ganti dengan URL Web App Anda dari Google Apps Script
+# URL Web App Google Apps Script Anda
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8F7dcFUCMy7Dk-49c-zqV1xxEudo_3zGA_AJvfze3pbrAgQPUleaQbSwEq8TrSlzC/exec"
 
 st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="centered")
@@ -42,9 +42,10 @@ with tab1:
                     "keterangan": keterangan
                 }
                 try:
-                    res = requests.post(WEB_APP_URL, json=payload, timeout=25)
+                    res = requests.post(WEB_APP_URL, json=payload, timeout=30)
                     if res.status_code == 200:
                         st.success("✓ Catatan berhasil tersimpan ke Google Sheets!")
+                        st.cache_data.clear() # Hapus cache agar data baru langsung terbaca
                     else:
                         st.error("Gagal menyimpan data ke Google Sheets.")
                 except Exception as e:
@@ -54,19 +55,19 @@ with tab1:
 with tab2:
     st.subheader("Riwayat & Total Pengeluaran")
     
+    # Fungsi fetch data menggunakan CACHE agar ganti-ganti tanggal di Custom tidak gampang timeout
+    @st.cache_data(ttl=120)
+    def fetch_sheet_data():
+        response = requests.get(WEB_APP_URL, timeout=30)
+        return response.json()
+
     if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
         st.rerun()
         
     try:
         with st.spinner("Mengambil data dari Google Sheets..."):
-            # Timeout dinaikkan ke 25 detik agar tidak gampang error saat server cold start
-            res = requests.get(WEB_APP_URL, timeout=25)
-        
-        try:
-            data = res.json()
-        except Exception:
-            st.error("Apps Script tidak mengembalikan format JSON. Pastikan akses Deployment sudah diatur ke 'Anyone'.")
-            data = []
+            data = fetch_sheet_data()
 
         if isinstance(data, list) and len(data) > 1:
             header = data[0]
@@ -98,11 +99,8 @@ with tab2:
                 df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
             
             elif filter_periode == "Custom (Rentang Tanggal)" and "_dt" in df.columns:
-                col_tgl1, col_tgl2 = st.columns(2)
-                with col_tgl1:
-                    tgl_mulai = st.date_input("Dari Tanggal", datetime.now())
-                with col_tgl2:
-                    tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
+                tgl_mulai = st.date_input("Dari Tanggal", datetime.now(), key="custom_start")
+                tgl_selesai = st.date_input("Sampai Tanggal", datetime.now(), key="custom_end")
                 
                 start_dt = pd.to_datetime(tgl_mulai)
                 end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
@@ -115,20 +113,23 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # Atur penomoran indeks mulai dari 1
-            if not df_display.empty:
-                df_display.index = range(1, len(df_display) + 1)
-            
             # Hitung total
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
-            st.dataframe(df_display, use_container_width=True)
+            
+            # Tampilkan tabel tanpa nomor indeks (hide_index=True) agar muat maksimal & lancar digeser di HP
+            st.dataframe(
+                df_display, 
+                use_container_width=True, 
+                hide_index=True
+            )
+            
         elif isinstance(data, list) and len(data) <= 1:
             st.info("Belum ada data pengeluaran di Google Sheets.")
             
     except requests.exceptions.Timeout:
-        st.error("Server Google Apps Script sedang sibuk/tidur. Silakan klik tombol '🔄 Refresh Data' di atas.")
+        st.error("Server Google Apps Script lambat merespons. Silakan klik '🔄 Refresh Data' di atas.")
     except Exception as e:
-        st.error(f"Gagal mengambil data: {e}")
+        st.error(f"Gagal mengambil data dari Google Sheets. Error: {e}")
