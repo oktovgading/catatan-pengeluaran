@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-# URL Google Apps Script Anda
+# Ganti dengan URL Web App Anda dari Google Apps Script
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycby8F7dcFUCMy7Dk-49c-zqV1xxEudo_3zGA_AJvfze3pbrAgQPUleaQbSwEq8TrSlzC/exec"
 
 st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="centered")
@@ -31,11 +31,8 @@ with tab1:
             if jumlah <= 0:
                 st.warning("Jumlah pengeluaran harus lebih besar dari 0.")
             else:
-                # Ambil waktu WIB
                 wib = pytz.timezone('Asia/Jakarta')
                 now_wib = datetime.now(wib)
-                
-                # Format: YYYY-MM-DD HH:MM
                 tanggal_jam_str = f"{input_tanggal.strftime('%Y-%m-%d')} {now_wib.strftime('%H:%M')}"
                 
                 payload = {
@@ -45,8 +42,8 @@ with tab1:
                     "keterangan": keterangan
                 }
                 try:
-                    res = requests.post(WEB_APP_URL, json=payload)
-                    if res.status_code == 200 and res.json().get("status") == "success":
+                    res = requests.post(WEB_APP_URL, json=payload, timeout=10)
+                    if res.status_code == 200:
                         st.success("✓ Catatan berhasil tersimpan ke Google Sheets!")
                     else:
                         st.error("Gagal menyimpan data ke Google Sheets.")
@@ -56,53 +53,82 @@ with tab1:
 # --- TAB 2: RIWAYAT DATA & FILTER ---
 with tab2:
     st.subheader("Riwayat & Total Pengeluaran")
-    try:
-        res = requests.get(WEB_APP_URL)
-        data = res.json()
+    
+    if st.button("🔄 Refresh Data"):
+        st.rerun()
         
-        if len(data) > 1:
+    try:
+        res = requests.get(WEB_APP_URL, timeout=10)
+        
+        try:
+            data = res.json()
+        except Exception:
+            st.error("Apps Script tidak mengembalikan format JSON. Pastikan akses Deployment sudah diatur ke 'Anyone'.")
+            data = []
+
+        if isinstance(data, list) and len(data) > 1:
             header = data[0]
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
             # Konversi kolom Jumlah ke angka
-            df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
+            if "Jumlah" in df.columns:
+                df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
-            # Kolom pembantu untuk filter tanggal
-            df["_dt"] = pd.to_datetime(df["Tanggal"], errors="coerce")
+            # Buat kolom datetime internal untuk filtering
+            if "Tanggal" in df.columns:
+                df["_dt"] = pd.to_datetime(df["Tanggal"], errors="coerce")
             
-            # --- PILIHAN FILTER PERIODE ---
+            # --- FILTER PERIODE ---
             filter_periode = st.selectbox(
                 "📅 Pilih Periode Tampilan:",
-                ["Semua", "Bulan Ini", "Minggu Ini"]
+                ["Semua", "Bulan Ini", "Minggu Ini", "Custom (Rentang Tanggal)"]
             )
             
-            # Waktu saat ini (WIB)
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
-            if filter_periode == "Bulan Ini":
+            if filter_periode == "Bulan Ini" and "_dt" in df.columns:
                 df_filtered = df[(df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)].copy()
-            elif filter_periode == "Minggu Ini":
-                current_week = now.isocalendar().week
-                df_filtered = df[(df["_dt"].dt.isocalendar().week == current_week) & (df["_dt"].dt.year == now.year)].copy()
+            
+            elif filter_periode == "Minggu Ini" and "_dt" in df.columns:
+                current_year, current_week, _ = now.isocalendar()
+                iso_cal = df["_dt"].dt.isocalendar()
+                df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
+            
+            elif filter_periode == "Custom (Rentang Tanggal)" and "_dt" in df.columns:
+                col_tgl1, col_tgl2 = st.columns(2)
+                with col_tgl1:
+                    tgl_mulai = st.date_input("Dari Tanggal", datetime.now())
+                with col_tgl2:
+                    tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
+                
+                # Filter berdasarkan rentang tanggal
+                start_dt = pd.to_datetime(tgl_mulai)
+                end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
+                
+                df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+            
             else:
                 df_filtered = df.copy()
             
             # Hapus kolom bantuan _dt
-            df_filtered = df_filtered.drop(columns=["_dt"])
+            df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
             # Atur penomoran indeks mulai dari 1
-            if not df_filtered.empty:
-                df_filtered.index = range(1, len(df_filtered) + 1)
+            if not df_display.empty:
+                df_display.index = range(1, len(df_display) + 1)
             
-            # Tampilkan total pengeluaran berdasarkan filter
-            total = df_filtered["Jumlah"].sum()
+            # Hitung total
+            total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
-            st.dataframe(df_filtered, use_container_width=True)
-        else:
-            st.info("Belum ada data pengeluaran.")
+            st.dataframe(df_display, use_container_width=True)
+        elif isinstance(data, list) and len(data) <= 1:
+            st.info("Belum ada data pengeluaran di Google Sheets.")
+            
+    except requests.exceptions.Timeout:
+        st.error("Koneksi ke Google Sheets kehabisan waktu (Timeout). Silakan klik '🔄 Refresh Data'.")
     except Exception as e:
         st.error(f"Gagal mengambil data: {e}")
