@@ -99,13 +99,20 @@ with tab2:
                 df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
             
             elif filter_periode == "Custom (Rentang Tanggal)" and "_dt" in df.columns:
-                tgl_mulai = st.date_input("Dari Tanggal", datetime.now(), key="custom_start")
-                tgl_selesai = st.date_input("Sampai Tanggal", datetime.now(), key="custom_end")
+                # Menggunakan date_input rentang tunggal agar lebih rapi & stabil
+                range_tgl = st.date_input(
+                    "Pilih Rentang Tanggal (Mulai - Selesai):",
+                    value=(datetime.now(), datetime.now()),
+                    key="custom_range"
+                )
                 
-                start_dt = pd.to_datetime(tgl_mulai)
-                end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
-                
-                df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
+                    tgl_mulai, tgl_selesai = range_tgl
+                    start_dt = pd.to_datetime(tgl_mulai)
+                    end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
+                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                else:
+                    df_filtered = df.copy()
             
             else:
                 df_filtered = df.copy()
@@ -119,11 +126,12 @@ with tab2:
             
             st.divider()
             
-            # Tampilkan tabel tanpa nomor indeks (hide_index=True) agar muat maksimal & lancar digeser di HP
-            st.dataframe(
+            # Menggunakan st.data_editor (disabled=True) agar scrolling/swipe horizontal di HP sangat lancar
+            st.data_editor(
                 df_display, 
                 use_container_width=True, 
-                hide_index=True
+                hide_index=True,
+                disabled=True
             )
             
         elif isinstance(data, list) and len(data) <= 1:
