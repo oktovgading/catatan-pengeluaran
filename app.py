@@ -42,7 +42,7 @@ with tab1:
                     "keterangan": keterangan
                 }
                 try:
-                    res = requests.post(WEB_APP_URL, json=payload, timeout=10)
+                    res = requests.post(WEB_APP_URL, json=payload, timeout=25)
                     if res.status_code == 200:
                         st.success("✓ Catatan berhasil tersimpan ke Google Sheets!")
                     else:
@@ -58,7 +58,9 @@ with tab2:
         st.rerun()
         
     try:
-        res = requests.get(WEB_APP_URL, timeout=10)
+        with st.spinner("Mengambil data dari Google Sheets..."):
+            # Timeout dinaikkan ke 25 detik agar tidak gampang error saat server cold start
+            res = requests.get(WEB_APP_URL, timeout=25)
         
         try:
             data = res.json()
@@ -79,7 +81,6 @@ with tab2:
             if "Tanggal" in df.columns:
                 df["_dt"] = pd.to_datetime(df["Tanggal"], errors="coerce")
             
-            # --- FILTER PERIODE ---
             filter_periode = st.selectbox(
                 "📅 Pilih Periode Tampilan:",
                 ["Semua", "Bulan Ini", "Minggu Ini", "Custom (Rentang Tanggal)"]
@@ -103,7 +104,6 @@ with tab2:
                 with col_tgl2:
                     tgl_selesai = st.date_input("Sampai Tanggal", datetime.now())
                 
-                # Filter berdasarkan rentang tanggal
                 start_dt = pd.to_datetime(tgl_mulai)
                 end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
                 
@@ -129,6 +129,6 @@ with tab2:
             st.info("Belum ada data pengeluaran di Google Sheets.")
             
     except requests.exceptions.Timeout:
-        st.error("Koneksi ke Google Sheets kehabisan waktu (Timeout). Silakan klik '🔄 Refresh Data'.")
+        st.error("Server Google Apps Script sedang sibuk/tidur. Silakan klik tombol '🔄 Refresh Data' di atas.")
     except Exception as e:
         st.error(f"Gagal mengambil data: {e}")
