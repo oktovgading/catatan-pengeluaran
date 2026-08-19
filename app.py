@@ -31,11 +31,11 @@ with tab1:
             if jumlah <= 0:
                 st.warning("Jumlah pengeluaran harus lebih besar dari 0.")
             else:
-                # Ambil jam & menit saat ini dalam zona waktu WIB
+                # Ambil waktu WIB
                 wib = pytz.timezone('Asia/Jakarta')
                 now_wib = datetime.now(wib)
                 
-                # Gabungkan Tanggal yang dipilih dengan Jam:Menit saat ini (Format: YYYY-MM-DD HH:MM)
+                # Format: YYYY-MM-DD HH:MM
                 tanggal_jam_str = f"{input_tanggal.strftime('%Y-%m-%d')} {now_wib.strftime('%H:%M')}"
                 
                 payload = {
@@ -53,9 +53,9 @@ with tab1:
                 except Exception as e:
                     st.error(f"Terjadi kesalahan koneksi: {e}")
 
-# --- TAB 2: RIWAYAT DATA ---
+# --- TAB 2: RIWAYAT DATA & FILTER ---
 with tab2:
-    st.subheader("Riwayat & Total")
+    st.subheader("Riwayat & Total Pengeluaran")
     try:
         res = requests.get(WEB_APP_URL)
         data = res.json()
@@ -65,17 +65,43 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Mengubah nomor urut indeks agar mulai dari 1
-            df.index = df.index + 1
-            
             # Konversi kolom Jumlah ke angka
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
-            total = df["Jumlah"].sum()
-            st.metric(label="Total Pengeluaran", value=f"Rp {total:,.0f}")
+            # Kolom pembantu untuk filter tanggal
+            df["_dt"] = pd.to_datetime(df["Tanggal"], errors="coerce")
+            
+            # --- PILIHAN FILTER PERIODE ---
+            filter_periode = st.selectbox(
+                "📅 Pilih Periode Tampilan:",
+                ["Semua", "Bulan Ini", "Minggu Ini"]
+            )
+            
+            # Waktu saat ini (WIB)
+            wib = pytz.timezone('Asia/Jakarta')
+            now = datetime.now(wib)
+            
+            if filter_periode == "Bulan Ini":
+                df_filtered = df[(df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)].copy()
+            elif filter_periode == "Minggu Ini":
+                current_week = now.isocalendar().week
+                df_filtered = df[(df["_dt"].dt.isocalendar().week == current_week) & (df["_dt"].dt.year == now.year)].copy()
+            else:
+                df_filtered = df.copy()
+            
+            # Hapus kolom bantuan _dt
+            df_filtered = df_filtered.drop(columns=["_dt"])
+            
+            # Atur penomoran indeks mulai dari 1
+            if not df_filtered.empty:
+                df_filtered.index = range(1, len(df_filtered) + 1)
+            
+            # Tampilkan total pengeluaran berdasarkan filter
+            total = df_filtered["Jumlah"].sum()
+            st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df_filtered, use_container_width=True)
         else:
             st.info("Belum ada data pengeluaran.")
     except Exception as e:
