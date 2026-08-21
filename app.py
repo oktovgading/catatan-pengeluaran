@@ -20,7 +20,7 @@ with tab1:
         input_tanggal = st.date_input("Tanggal", datetime.now())
         kategori = st.selectbox(
             "Kategori", 
-            ["Makanan & Minuman", "Transportasi", "Kebutuhan Rumah", "Hiburan", "Tagihan & Pulsa", "Lainnya"]
+            ["Belanja bulanan", "Transportasi", "Kebutuhan Rumah", "Hiburan / Jajanan", "Tagihan & Pulsa", "Lainnya"]
         )
         jumlah = st.number_input("Jumlah (Rp)", min_value=0, step=1000, format="%d")
         keterangan = st.text_input("Keterangan (Opsional)")
