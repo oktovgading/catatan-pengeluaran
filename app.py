@@ -78,7 +78,7 @@ with tab2:
             if "Jumlah" in df.columns:
                 df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
-            # Pembacaan tanggal yang fleksibel & aman dari error format
+            # Pembacaan tanggal yang fleksibel & aman
             if "Tanggal" in df.columns:
                 df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
@@ -90,14 +90,12 @@ with tab2:
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
-            # Pengecekan jika konversi tanggal berhasil (tidak kosong semua)
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
             if filter_periode == "Bulan Ini" and has_valid_dt:
                 df_filtered = df[(df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)].copy()
             
             elif filter_periode == "Minggu Ini" and has_valid_dt:
-                # Memfilter 7 hari terakhir atau minggu ISO berjalan
                 current_year, current_week, _ = now.isocalendar()
                 iso_cal = df["_dt"].dt.isocalendar()
                 df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
@@ -123,7 +121,7 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # 1. Total Keseluruhan berdasarkan periode yang terfilter
+            # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
@@ -143,8 +141,8 @@ with tab2:
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
-                # Menampilkan Grafik Batang
-                st.bar_chart(data=df_kat, x=col_kategori, y="Jumlah")
+                # Menampilkan Grafik Batang dengan tinggi tetap (height=250) agar stabil di HP
+                st.bar_chart(data=df_kat, x=col_kategori, y="Jumlah", height=250)
                 
                 # Format tampilan angka rupiah pada tabel ringkasan
                 df_kat_formatted = df_kat.copy()
