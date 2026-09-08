@@ -273,15 +273,14 @@ with tab2:
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        # Format angka Rupiah ke kolom baru
-                        df_sub["Jumlah Display"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                        # Format Angka Rupiah
+                        df_sub["Jumlah"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
-                        # KUNCI MATI URUTAN KOLOM: Tanggal | Jumlah Display | Keterangan
-                        df_sub_final = pd.DataFrame({
-                            "Tanggal": df_sub["Tanggal"].fillna("-"),
-                            "Jumlah": df_sub["Jumlah Display"],
-                            "Keterangan": df_sub["Keterangan"].fillna("-")
-                        })
+                        # Kunci Urutan Kolom Terikat: Tanggal, Jumlah, Keterangan
+                        target_columns = ["Tanggal", "Jumlah", "Keterangan"]
+                        
+                        # Reindex Memaksa Urutan Kolom Tersebut dari Kiri ke Kanan
+                        df_sub_final = df_sub.reindex(columns=target_columns).fillna("-")
                         
                         # Tampilkan tabel detail
                         st.dataframe(
