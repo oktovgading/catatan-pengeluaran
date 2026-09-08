@@ -111,10 +111,37 @@ with tab2:
             # Pembacaan tanggal yang fleksibel & aman
             df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
+            # --- BAGIAN 0: TAMPILKAN TRANSAKSI TERBARU (5 TERAKHIR) ---
+            st.write("### 🕒 Transaksi Terbaru (5 Terakhir)")
+            df_recent = df.copy()
+            if "_dt" in df_recent.columns and df_recent["_dt"].notnull().any():
+                df_recent = df_recent.sort_values(by="_dt", ascending=False)
+            
+            df_recent_top5 = df_recent.head(5).copy()
+            if not df_recent_top5.empty:
+                df_recent_top5["Jumlah"] = df_recent_top5["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                df_recent_top5["Kategori"] = df_recent_top5["Kategori"].apply(
+                    lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}"
+                )
+                df_recent_display = df_recent_top5.reindex(columns=["Tanggal", "Kategori", "Jumlah", "Keterangan"]).fillna("-")
+                
+                st.dataframe(
+                    df_recent_display, 
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
+                        "Kategori": st.column_config.TextColumn("Kategori", width="medium"),
+                        "Jumlah": st.column_config.TextColumn("Jumlah", width="small"),
+                        "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
+                    }
+                )
+            st.divider()
+
+            # --- PERHITUNGAN TANGGAL & HARI PERIODE ---
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
-            # Perhitungan Tahun & Bulan saat ini vs Bulan Lalu
             current_month = now.month
             current_year = now.year
             
@@ -125,16 +152,13 @@ with tab2:
                 last_month = current_month - 1
                 last_month_year = current_year
                 
-            # Nama Singkat Bulan
             nama_bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
             curr_month_str = nama_bulan[current_month - 1]
             last_month_str = nama_bulan[last_month - 1]
             
-            # Jumlah hari di bulan berjalan & bulan lalu
             days_in_curr_month = calendar.monthrange(current_year, current_month)[1]
             days_in_last_month = calendar.monthrange(last_month_year, last_month)[1]
             
-            # Format Label Pilihan Dropdown Dinamis
             opt_m1_curr = f"Minggu ke-1 (1 - 7 {curr_month_str})"
             opt_m2_curr = f"Minggu ke-2 (8 - 14 {curr_month_str})"
             opt_m3_curr = f"Minggu ke-3 (15 - 21 {curr_month_str})"
@@ -147,7 +171,6 @@ with tab2:
             opt_m4_last = f"Minggu ke-4 (22 - 28 {last_month_str})"
             opt_m5_last = f"Minggu ke-5 (29 - {days_in_last_month} {last_month_str})"
             
-            # Opsi pilihan periode tampilan
             filter_options = [
                 "Semua", 
                 "--- BULAN INI ---",
@@ -168,16 +191,15 @@ with tab2:
                 "Custom (Rentang Tanggal)"
             ]
             
-            filter_periode = st.selectbox("📅 Pilih Periode Tampilan:", filter_options)
+            filter_periode = st.selectbox("📅 Pilih Periode Laporan:", filter_options)
             
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
-            # Logika Pemfilteran
+            # Logika Pemfilteran Laporan
             if has_valid_dt:
                 is_bulan_ini = (df["_dt"].dt.month == current_month) & (df["_dt"].dt.year == current_year)
                 is_bulan_lalu = (df["_dt"].dt.month == last_month) & (df["_dt"].dt.year == last_month_year)
                 
-                # --- BULAN INI ---
                 if filter_periode == f"Bulan Ini ({curr_month_str} {current_year})":
                     df_filtered = df[is_bulan_ini].copy()
                 elif filter_periode == opt_m1_curr:
@@ -191,7 +213,6 @@ with tab2:
                 elif filter_periode == opt_m5_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 29)].copy()
                 
-                # --- BULAN LALU ---
                 elif filter_periode == f"Bulan Lalu ({last_month_str} {last_month_year})":
                     df_filtered = df[is_bulan_lalu].copy()
                 elif filter_periode == opt_m1_last:
@@ -205,7 +226,6 @@ with tab2:
                 elif filter_periode == opt_m5_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 29)].copy()
                 
-                # --- CUSTOM ---
                 elif filter_periode == "Custom (Rentang Tanggal)":
                     range_tgl = st.date_input(
                         "Pilih Rentang Tanggal (Mulai - Selesai):",
@@ -225,13 +245,10 @@ with tab2:
             else:
                 df_filtered = df.copy()
             
-            # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
-            
-            # Label Periode Bersih
             label_periode = filter_periode.replace("-", "").strip()
             
-            # 1. Total Keseluruhan
+            # --- 1. TOTAL KESELURUHAN PERIODE ---
             total = df_display["Jumlah"].sum()
             st.metric(label=f"Total Pengeluaran ({label_periode})", value=f"Rp {total:,.0f}")
             
@@ -273,16 +290,11 @@ with tab2:
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        # Format Angka Rupiah
                         df_sub["Jumlah"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
-                        # Kunci Urutan Kolom Terikat: Tanggal, Jumlah, Keterangan
                         target_columns = ["Tanggal", "Jumlah", "Keterangan"]
-                        
-                        # Reindex Memaksa Urutan Kolom Tersebut dari Kiri ke Kanan
                         df_sub_final = df_sub.reindex(columns=target_columns).fillna("-")
                         
-                        # Tampilkan tabel detail
                         st.dataframe(
                             df_sub_final, 
                             hide_index=True,
