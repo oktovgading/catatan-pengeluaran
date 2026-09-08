@@ -92,17 +92,26 @@ with tab2:
             if "Tanggal" in df.columns:
                 df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
-            # Opsi pilihan periode tampilan
+            # Opsi pilihan periode tampilan (Lengkap: Bulan Ini & Bulan Lalu)
             filter_periode = st.selectbox(
                 "📅 Pilih Periode Tampilan:",
                 [
                     "Semua", 
+                    "--- BULAN INI ---",
                     "Bulan Ini", 
                     "Minggu ke-1 (Bulan Ini)", 
                     "Minggu ke-2 (Bulan Ini)", 
                     "Minggu ke-3 (Bulan Ini)", 
                     "Minggu ke-4 (Bulan Ini)", 
                     "Minggu ke-5 (Bulan Ini)", 
+                    "--- BULAN LALU ---",
+                    "Bulan Lalu", 
+                    "Minggu ke-1 (Bulan Lalu)", 
+                    "Minggu ke-2 (Bulan Lalu)", 
+                    "Minggu ke-3 (Bulan Lalu)", 
+                    "Minggu ke-4 (Bulan Lalu)", 
+                    "Minggu ke-5 (Bulan Lalu)", 
+                    "--- CUSTOM ---",
                     "Custom (Rentang Tanggal)"
                 ]
             )
@@ -110,30 +119,54 @@ with tab2:
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
+            # Perhitungan Tahun & Bulan saat ini vs Bulan Lalu
+            current_month = now.month
+            current_year = now.year
+            
+            # Menentukan Bulan Lalu dan Tahunnya (jika bulan sekarang Januari, bulan lalu adalah Desember tahun sebelumnya)
+            if current_month == 1:
+                last_month = 12
+                last_month_year = current_year - 1
+            else:
+                last_month = current_month - 1
+                last_month_year = current_year
+            
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
             # Logika Pemfilteran
             if has_valid_dt:
-                is_bulan_ini = (df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)
+                is_bulan_ini = (df["_dt"].dt.month == current_month) & (df["_dt"].dt.year == current_year)
+                is_bulan_lalu = (df["_dt"].dt.month == last_month) & (df["_dt"].dt.year == last_month_year)
                 
+                # --- BULAN INI ---
                 if filter_periode == "Bulan Ini":
                     df_filtered = df[is_bulan_ini].copy()
-                
                 elif filter_periode == "Minggu ke-1 (Bulan Ini)":
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
-                
                 elif filter_periode == "Minggu ke-2 (Bulan Ini)":
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
-                
                 elif filter_periode == "Minggu ke-3 (Bulan Ini)":
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
-                
                 elif filter_periode == "Minggu ke-4 (Bulan Ini)":
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
-                
                 elif filter_periode == "Minggu ke-5 (Bulan Ini)":
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 29)].copy()
                 
+                # --- BULAN LALU ---
+                elif filter_periode == "Bulan Lalu":
+                    df_filtered = df[is_bulan_lalu].copy()
+                elif filter_periode == "Minggu ke-1 (Bulan Lalu)":
+                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
+                elif filter_periode == "Minggu ke-2 (Bulan Lalu)":
+                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
+                elif filter_periode == "Minggu ke-3 (Bulan Lalu)":
+                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
+                elif filter_periode == "Minggu ke-4 (Bulan Lalu)":
+                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
+                elif filter_periode == "Minggu ke-5 (Bulan Lalu)":
+                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 29)].copy()
+                
+                # --- CUSTOM ---
                 elif filter_periode == "Custom (Rentang Tanggal)":
                     range_tgl = st.date_input(
                         "Pilih Rentang Tanggal (Mulai - Selesai):",
@@ -159,20 +192,22 @@ with tab2:
             # Deteksi nama kolom kategori
             col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
             
+            # Tampilkan Label Periode Bersih (menghapus garis pemisah jika dipilih)
+            label_periode = filter_periode.replace("-", "").strip()
+            
             # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
-            st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
+            st.metric(label=f"Total Pengeluaran ({label_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
 
-            # --- 2. LAPORAN RINGKASAN PER KATEGORI (DENGAN IKON) ---
+            # --- 2. LAPORAN RINGKASAN PER KATEGORI ---
             if col_kategori in df_display.columns and not df_display.empty:
                 st.write("### 🏷️ Ringkasan Total per Kategori")
                 
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
-                # Tambahkan ikon pada nama kategori di tabel ringkasan
                 df_kat_formatted = df_kat.copy()
                 df_kat_formatted[col_kategori] = df_kat_formatted[col_kategori].apply(
                     lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}"
@@ -189,7 +224,7 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (DENGAN IKON) ---
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
             st.write("### 📂 Detail Rincian per Kategori")
             
             if col_kategori in df_display.columns and not df_display.empty:
@@ -199,10 +234,8 @@ with tab2:
                     df_sub = df_display[df_display[col_kategori] == kat].copy()
                     sub_total = df_sub["Jumlah"].sum()
                     
-                    # Ambil ikon kategori (default paku payung 📌 jika tidak ditemukan)
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
-                    # Tampilkan expander dengan ikon kategori masing-masing
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
                         df_sub_display = df_sub.drop(columns=[col_kategori], errors="ignore")
                         if "Jumlah" in df_sub_display.columns:
