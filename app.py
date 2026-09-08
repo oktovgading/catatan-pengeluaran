@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import calendar
 import pytz
 
@@ -213,7 +213,7 @@ with tab2:
             # Deteksi nama kolom kategori
             col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
             
-            # Tampilkan Label Periode Bersih (menghapus garis pemisah jika dipilih)
+            # Label Periode Bersih
             label_periode = filter_periode.replace("-", "").strip()
             
             # 1. Total Keseluruhan
@@ -245,7 +245,7 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (TERKUNCI KOLOMNYA) ---
             st.write("### 📂 Detail Rincian per Kategori")
             
             if col_kategori in df_display.columns and not df_display.empty:
@@ -258,12 +258,27 @@ with tab2:
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        df_sub_display = df_sub.drop(columns=[col_kategori], errors="ignore")
-                        if "Jumlah" in df_sub_display.columns:
-                            df_sub_display["Jumlah"] = df_sub_display["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                        # Format angka Rupiah
+                        if "Jumlah" in df_sub.columns:
+                            df_sub["Jumlah_Formatted"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                        else:
+                            df_sub["Jumlah_Formatted"] = "Rp 0"
                         
+                        # Kunci kolom secara pasti
+                        col_target = ["Tanggal", "Jumlah_Formatted", "Keterangan"]
+                        
+                        # Pastikan kolom Tanggal & Keterangan selalu ada meskipun kosong
+                        if "Tanggal" not in df_sub.columns:
+                            df_sub["Tanggal"] = "-"
+                        if "Keterangan" not in df_sub.columns:
+                            df_sub["Keterangan"] = "-"
+                            
+                        # Ambil data sesuai urutan terikat
+                        df_sub_final = df_sub[col_target].rename(columns={"Jumlah_Formatted": "Jumlah"})
+                        
+                        # Tampilkan tabel detail
                         st.dataframe(
-                            df_sub_display, 
+                            df_sub_final, 
                             hide_index=True,
                             column_config={
                                 "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
