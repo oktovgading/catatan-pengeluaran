@@ -11,7 +11,7 @@ st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="c
 
 st.title("💰 Catatan Pengeluaran")
 
-tab1, tab2 = st.tabs(["➕ Tambah Pengeluaran", "📊 Lihat Data & Total"])
+tab1, tab2 = st.tabs(["➕ Tambah Pengeluaran", "📊 Lihat Data & Laporan"])
 
 # --- TAB 1: FORM INPUT ---
 with tab1:
@@ -51,9 +51,9 @@ with tab1:
                 except Exception as e:
                     st.error(f"Terjadi kesalahan koneksi: {e}")
 
-# --- TAB 2: RIWAYAT DATA & FILTER ---
+# --- TAB 2: RIWAYAT DATA & LAPORAN ---
 with tab2:
-    st.subheader("Riwayat & Total Pengeluaran")
+    st.subheader("Riwayat & Laporan Pengeluaran")
     
     # Fungsi fetch data menggunakan CACHE agar ganti-ganti tanggal di Custom tidak gampang timeout
     @st.cache_data(ttl=120)
@@ -120,13 +120,48 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # Hitung total
+            # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
+
+            # --- 2. LAPORAN PER KATEGORI ---
+            col_kategori = None
+            if "Katagori" in df_display.columns:
+                col_kategori = "Katagori"
+            elif "Kategori" in df_display.columns:
+                col_kategori = "Kategori"
+
+            if col_kategori and not df_display.empty:
+                st.write("### 🏷️ Laporan per Kategori")
+                
+                # Mengelompokkan total pengeluaran per kategori
+                df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
+                df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
+                
+                # Menampilkan Grafik Batang
+                st.bar_chart(data=df_kat, x=col_kategori, y="Jumlah")
+                
+                # Format tampilan angka rupiah pada tabel ringkasan
+                df_kat_formatted = df_kat.copy()
+                df_kat_formatted["Total (Rp)"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                df_kat_formatted = df_kat_formatted.drop(columns=["Jumlah"])
+                
+                # Menampilkan Tabel Ringkasan Kategori
+                st.data_editor(
+                    df_kat_formatted,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=True
+                )
+                
+                st.divider()
+
+            # --- 3. RINCIAN PENGELUARAN DETAIL ---
+            st.write("### 📝 Rincian Pengeluaran")
             
-            # Menggunakan st.data_editor (disabled=True) agar scrolling/swipe horizontal di HP sangat lancar
+            # Tampilkan tabel detail tanpa indeks (disabled=True agar mulus di-swipe di HP)
             st.data_editor(
                 df_display, 
                 use_container_width=True, 
