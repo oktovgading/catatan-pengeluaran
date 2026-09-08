@@ -127,7 +127,7 @@ with tab2:
             
             st.divider()
 
-            # --- 2. LAPORAN PER KATEGORI ---
+            # --- 2. LAPORAN PER KATEGORI (HANYA TABEL, DIURUTKAN DARI TERBESAR) ---
             col_kategori = None
             if "Katagori" in df_display.columns:
                 col_kategori = "Katagori"
@@ -135,21 +135,18 @@ with tab2:
                 col_kategori = "Kategori"
 
             if col_kategori and not df_display.empty:
-                st.write("### 🏷️ Laporan per Kategori")
+                st.write("### 🏷️ Total per Kategori (Terbesar - Terkecil)")
                 
-                # Mengelompokkan total pengeluaran per kategori
+                # Mengelompokkan total pengeluaran per kategori & urutkan dari terbesar
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
-                # Menampilkan Grafik Batang dengan tinggi tetap (height=250) agar stabil di HP
-                st.bar_chart(data=df_kat, x=col_kategori, y="Jumlah", height=250)
-                
-                # Format tampilan angka rupiah pada tabel ringkasan
+                # Format tampilan angka rupiah
                 df_kat_formatted = df_kat.copy()
-                df_kat_formatted["Total (Rp)"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                df_kat_formatted["Total Pengeluaran"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                 df_kat_formatted = df_kat_formatted.drop(columns=["Jumlah"])
                 
-                # Menampilkan Tabel Ringkasan Kategori
+                # Tampilkan Tabel Ringkasan Kategori
                 st.data_editor(
                     df_kat_formatted,
                     use_container_width=True,
@@ -160,7 +157,7 @@ with tab2:
                 st.divider()
 
             # --- 3. RINCIAN PENGELUARAN DETAIL ---
-            st.write("### 📝 Rincian Pengeluaran")
+            st.write("### 📝 Rincian Pengeluaran Detail")
             
             # Tampilkan tabel detail
             st.data_editor(
