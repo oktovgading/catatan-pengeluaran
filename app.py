@@ -1,7 +1,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+import calendar
 import pytz
 
 # URL Web App Google Apps Script Anda
@@ -92,30 +93,6 @@ with tab2:
             if "Tanggal" in df.columns:
                 df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
-            # Opsi pilihan periode tampilan (Lengkap: Bulan Ini & Bulan Lalu)
-            filter_periode = st.selectbox(
-                "📅 Pilih Periode Tampilan:",
-                [
-                    "Semua", 
-                    "--- BULAN INI ---",
-                    "Bulan Ini", 
-                    "Minggu ke-1 (Bulan Ini)", 
-                    "Minggu ke-2 (Bulan Ini)", 
-                    "Minggu ke-3 (Bulan Ini)", 
-                    "Minggu ke-4 (Bulan Ini)", 
-                    "Minggu ke-5 (Bulan Ini)", 
-                    "--- BULAN LALU ---",
-                    "Bulan Lalu", 
-                    "Minggu ke-1 (Bulan Lalu)", 
-                    "Minggu ke-2 (Bulan Lalu)", 
-                    "Minggu ke-3 (Bulan Lalu)", 
-                    "Minggu ke-4 (Bulan Lalu)", 
-                    "Minggu ke-5 (Bulan Lalu)", 
-                    "--- CUSTOM ---",
-                    "Custom (Rentang Tanggal)"
-                ]
-            )
-            
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
@@ -123,13 +100,57 @@ with tab2:
             current_month = now.month
             current_year = now.year
             
-            # Menentukan Bulan Lalu dan Tahunnya (jika bulan sekarang Januari, bulan lalu adalah Desember tahun sebelumnya)
             if current_month == 1:
                 last_month = 12
                 last_month_year = current_year - 1
             else:
                 last_month = current_month - 1
                 last_month_year = current_year
+                
+            # Nama Singkat Bulan
+            nama_bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
+            curr_month_str = nama_bulan[current_month - 1]
+            last_month_str = nama_bulan[last_month - 1]
+            
+            # Jumlah hari di bulan berjalan & bulan lalu
+            days_in_curr_month = calendar.monthrange(current_year, current_month)[1]
+            days_in_last_month = calendar.monthrange(last_month_year, last_month)[1]
+            
+            # Format Label Pilihan Dropdown Dinamis
+            opt_m1_curr = f"Minggu ke-1 (1 - 7 {curr_month_str})"
+            opt_m2_curr = f"Minggu ke-2 (8 - 14 {curr_month_str})"
+            opt_m3_curr = f"Minggu ke-3 (15 - 21 {curr_month_str})"
+            opt_m4_curr = f"Minggu ke-4 (22 - 28 {curr_month_str})"
+            opt_m5_curr = f"Minggu ke-5 (29 - {days_in_curr_month} {curr_month_str})"
+            
+            opt_m1_last = f"Minggu ke-1 (1 - 7 {last_month_str})"
+            opt_m2_last = f"Minggu ke-2 (8 - 14 {last_month_str})"
+            opt_m3_last = f"Minggu ke-3 (15 - 21 {last_month_str})"
+            opt_m4_last = f"Minggu ke-4 (22 - 28 {last_month_str})"
+            opt_m5_last = f"Minggu ke-5 (29 - {days_in_last_month} {last_month_str})"
+            
+            # Opsi pilihan periode tampilan
+            filter_options = [
+                "Semua", 
+                "--- BULAN INI ---",
+                f"Bulan Ini ({curr_month_str} {current_year})", 
+                opt_m1_curr, 
+                opt_m2_curr, 
+                opt_m3_curr, 
+                opt_m4_curr, 
+                opt_m5_curr, 
+                "--- BULAN LALU ---",
+                f"Bulan Lalu ({last_month_str} {last_month_year})", 
+                opt_m1_last, 
+                opt_m2_last, 
+                opt_m3_last, 
+                opt_m4_last, 
+                opt_m5_last, 
+                "--- CUSTOM ---",
+                "Custom (Rentang Tanggal)"
+            ]
+            
+            filter_periode = st.selectbox("📅 Pilih Periode Tampilan:", filter_options)
             
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
@@ -139,31 +160,31 @@ with tab2:
                 is_bulan_lalu = (df["_dt"].dt.month == last_month) & (df["_dt"].dt.year == last_month_year)
                 
                 # --- BULAN INI ---
-                if filter_periode == "Bulan Ini":
+                if filter_periode == f"Bulan Ini ({curr_month_str} {current_year})":
                     df_filtered = df[is_bulan_ini].copy()
-                elif filter_periode == "Minggu ke-1 (Bulan Ini)":
+                elif filter_periode == opt_m1_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
-                elif filter_periode == "Minggu ke-2 (Bulan Ini)":
+                elif filter_periode == opt_m2_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
-                elif filter_periode == "Minggu ke-3 (Bulan Ini)":
+                elif filter_periode == opt_m3_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
-                elif filter_periode == "Minggu ke-4 (Bulan Ini)":
+                elif filter_periode == opt_m4_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
-                elif filter_periode == "Minggu ke-5 (Bulan Ini)":
+                elif filter_periode == opt_m5_curr:
                     df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 29)].copy()
                 
                 # --- BULAN LALU ---
-                elif filter_periode == "Bulan Lalu":
+                elif filter_periode == f"Bulan Lalu ({last_month_str} {last_month_year})":
                     df_filtered = df[is_bulan_lalu].copy()
-                elif filter_periode == "Minggu ke-1 (Bulan Lalu)":
+                elif filter_periode == opt_m1_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
-                elif filter_periode == "Minggu ke-2 (Bulan Lalu)":
+                elif filter_periode == opt_m2_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
-                elif filter_periode == "Minggu ke-3 (Bulan Lalu)":
+                elif filter_periode == opt_m3_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
-                elif filter_periode == "Minggu ke-4 (Bulan Lalu)":
+                elif filter_periode == opt_m4_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
-                elif filter_periode == "Minggu ke-5 (Bulan Lalu)":
+                elif filter_periode == opt_m5_last:
                     df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 29)].copy()
                 
                 # --- CUSTOM ---
