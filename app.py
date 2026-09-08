@@ -121,7 +121,7 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # KUNCI URUTAN KOLOM AGAR TIDAK BERUBAH-UBAH
+            # KUNCI URUTAN KOLOM
             col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
             target_order = ["Tanggal", col_kategori, "Jumlah", "Keterangan"]
             existing_cols = [c for c in target_order if c in df_display.columns]
@@ -138,16 +138,13 @@ with tab2:
             if col_kategori in df_display.columns and not df_display.empty:
                 st.write("### 🏷️ Total per Kategori (Terbesar - Terkecil)")
                 
-                # Mengelompokkan total pengeluaran per kategori & urutkan dari terbesar
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
-                # Format tampilan angka rupiah
                 df_kat_formatted = df_kat.copy()
                 df_kat_formatted["Total Pengeluaran"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                 df_kat_formatted = df_kat_formatted.drop(columns=["Jumlah"])
                 
-                # Tampilkan Tabel Ringkasan Kategori
                 st.data_editor(
                     df_kat_formatted,
                     use_container_width=True,
@@ -160,17 +157,20 @@ with tab2:
             # --- 3. RINCIAN PENGELUARAN DETAIL ---
             st.write("### 📝 Rincian Pengeluaran Detail")
             
-            # Format kolom Jumlah menjadi tampilan rupiah untuk tabel detail
             df_detail = df_display.copy()
             if "Jumlah" in df_detail.columns:
                 df_detail["Jumlah"] = df_detail["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
             
-            # Tampilkan tabel detail
-            st.data_editor(
+            # Tampilkan tabel detail dengan lebar kolom yang ditentukan agar bisa di-scroll samping
+            st.dataframe(
                 df_detail, 
-                use_container_width=True, 
                 hide_index=True,
-                disabled=True
+                column_config={
+                    "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
+                    col_kategori: st.column_config.TextColumn(col_kategori, width="medium"),
+                    "Jumlah": st.column_config.TextColumn("Jumlah", width="small"),
+                    "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
+                }
             )
             
         elif isinstance(data, list) and len(data) <= 1:
