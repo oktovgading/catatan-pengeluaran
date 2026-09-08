@@ -55,6 +55,16 @@ with tab1:
 with tab2:
     st.subheader("Riwayat & Laporan Pengeluaran")
     
+    # Pemetaan Ikon Sesuai Kategori
+    ICON_KATEGORI = {
+        "Belanja bulanan": "🛒",
+        "Transportasi": "🚗",
+        "Kebutuhan Rumah": "🏠",
+        "Hiburan / Jajanan": "🍿",
+        "Tagihan & Pulsa": "💡",
+        "Lainnya": "📦"
+    }
+    
     # Fungsi fetch data menggunakan CACHE
     @st.cache_data(ttl=120)
     def fetch_sheet_data():
@@ -104,7 +114,6 @@ with tab2:
             
             # Logika Pemfilteran
             if has_valid_dt:
-                # Filter dasar untuk bulan ini
                 is_bulan_ini = (df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)
                 
                 if filter_periode == "Bulan Ini":
@@ -156,14 +165,18 @@ with tab2:
             
             st.divider()
 
-            # --- 2. LAPORAN RINGKASAN PER KATEGORI ---
+            # --- 2. LAPORAN RINGKASAN PER KATEGORI (DENGAN IKON) ---
             if col_kategori in df_display.columns and not df_display.empty:
                 st.write("### 🏷️ Ringkasan Total per Kategori")
                 
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
+                # Tambahkan ikon pada nama kategori di tabel ringkasan
                 df_kat_formatted = df_kat.copy()
+                df_kat_formatted[col_kategori] = df_kat_formatted[col_kategori].apply(
+                    lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}"
+                )
                 df_kat_formatted["Total Pengeluaran"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                 df_kat_formatted = df_kat_formatted.drop(columns=["Jumlah"])
                 
@@ -176,7 +189,7 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (DENGAN IKON) ---
             st.write("### 📂 Detail Rincian per Kategori")
             
             if col_kategori in df_display.columns and not df_display.empty:
@@ -186,7 +199,11 @@ with tab2:
                     df_sub = df_display[df_display[col_kategori] == kat].copy()
                     sub_total = df_sub["Jumlah"].sum()
                     
-                    with st.expander(f"📌 **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
+                    # Ambil ikon kategori (default paku payung 📌 jika tidak ditemukan)
+                    icon = ICON_KATEGORI.get(kat, "📌")
+                    
+                    # Tampilkan expander dengan ikon kategori masing-masing
+                    with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
                         df_sub_display = df_sub.drop(columns=[col_kategori], errors="ignore")
                         if "Jumlah" in df_sub_display.columns:
                             df_sub_display["Jumlah"] = df_sub_display["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
