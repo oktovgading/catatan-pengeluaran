@@ -82,9 +82,19 @@ with tab2:
             if "Tanggal" in df.columns:
                 df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
+            # Opsi pilihan periode tampilan
             filter_periode = st.selectbox(
                 "📅 Pilih Periode Tampilan:",
-                ["Semua", "Bulan Ini", "Minggu Ini", "Custom (Rentang Tanggal)"]
+                [
+                    "Semua", 
+                    "Bulan Ini", 
+                    "Minggu ke-1 (Bulan Ini)", 
+                    "Minggu ke-2 (Bulan Ini)", 
+                    "Minggu ke-3 (Bulan Ini)", 
+                    "Minggu ke-4 (Bulan Ini)", 
+                    "Minggu ke-5 (Bulan Ini)", 
+                    "Custom (Rentang Tanggal)"
+                ]
             )
             
             wib = pytz.timezone('Asia/Jakarta')
@@ -92,29 +102,45 @@ with tab2:
             
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
-            if filter_periode == "Bulan Ini" and has_valid_dt:
-                df_filtered = df[(df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)].copy()
-            
-            elif filter_periode == "Minggu Ini" and has_valid_dt:
-                current_year, current_week, _ = now.isocalendar()
-                iso_cal = df["_dt"].dt.isocalendar()
-                df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
-            
-            elif filter_periode == "Custom (Rentang Tanggal)" and has_valid_dt:
-                range_tgl = st.date_input(
-                    "Pilih Rentang Tanggal (Mulai - Selesai):",
-                    value=(datetime.now(), datetime.now()),
-                    key="custom_range"
-                )
+            # Logika Pemfilteran
+            if has_valid_dt:
+                # Filter dasar untuk bulan ini
+                is_bulan_ini = (df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)
                 
-                if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
-                    tgl_mulai, tgl_selesai = range_tgl
-                    start_dt = pd.to_datetime(tgl_mulai)
-                    end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
-                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                if filter_periode == "Bulan Ini":
+                    df_filtered = df[is_bulan_ini].copy()
+                
+                elif filter_periode == "Minggu ke-1 (Bulan Ini)":
+                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
+                
+                elif filter_periode == "Minggu ke-2 (Bulan Ini)":
+                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
+                
+                elif filter_periode == "Minggu ke-3 (Bulan Ini)":
+                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
+                
+                elif filter_periode == "Minggu ke-4 (Bulan Ini)":
+                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
+                
+                elif filter_periode == "Minggu ke-5 (Bulan Ini)":
+                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 29)].copy()
+                
+                elif filter_periode == "Custom (Rentang Tanggal)":
+                    range_tgl = st.date_input(
+                        "Pilih Rentang Tanggal (Mulai - Selesai):",
+                        value=(datetime.now(), datetime.now()),
+                        key="custom_range"
+                    )
+                    
+                    if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
+                        tgl_mulai, tgl_selesai = range_tgl
+                        start_dt = pd.to_datetime(tgl_mulai)
+                        end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
+                        df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                    else:
+                        df_filtered = df.copy()
                 else:
                     df_filtered = df.copy()
-            
             else:
                 df_filtered = df.copy()
             
@@ -150,26 +176,21 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (DIKELOMPOKKAN) ---
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
             st.write("### 📂 Detail Rincian per Kategori")
             
             if col_kategori in df_display.columns and not df_display.empty:
-                # Ambil daftar kategori unik dan urutkan berdasarkan total terbesarnya
                 kategori_list = df_display.groupby(col_kategori)["Jumlah"].sum().sort_values(ascending=False).index
                 
                 for kat in kategori_list:
-                    # Filter data khusus kategori ini
                     df_sub = df_display[df_display[col_kategori] == kat].copy()
                     sub_total = df_sub["Jumlah"].sum()
                     
-                    # Buat menu lipat (expander) untuk tiap kategori
                     with st.expander(f"📌 **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        # Format angka Rupiah
                         df_sub_display = df_sub.drop(columns=[col_kategori], errors="ignore")
                         if "Jumlah" in df_sub_display.columns:
                             df_sub_display["Jumlah"] = df_sub_display["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
-                        # Tampilkan tabel detail
                         st.dataframe(
                             df_sub_display, 
                             hide_index=True,
@@ -180,7 +201,7 @@ with tab2:
                             }
                         )
             else:
-                st.info("Belum ada rincian data untuk ditampilkan.")
+                st.info("Belum ada rincian data untuk periode ini.")
             
         elif isinstance(data, list) and len(data) <= 1:
             st.info("Belum ada data pengeluaran di Google Sheets.")
