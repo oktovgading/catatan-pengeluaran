@@ -121,12 +121,8 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # KUNCI URUTAN KOLOM
+            # Deteksi nama kolom kategori
             col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
-            target_order = ["Tanggal", col_kategori, "Jumlah", "Keterangan"]
-            existing_cols = [c for c in target_order if c in df_display.columns]
-            other_cols = [c for c in df_display.columns if c not in existing_cols]
-            df_display = df_display[existing_cols + other_cols]
             
             # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
@@ -134,9 +130,9 @@ with tab2:
             
             st.divider()
 
-            # --- 2. LAPORAN PER KATEGORI ---
+            # --- 2. LAPORAN RINGKASAN PER KATEGORI ---
             if col_kategori in df_display.columns and not df_display.empty:
-                st.write("### 🏷️ Total per Kategori (Terbesar - Terkecil)")
+                st.write("### 🏷️ Ringkasan Total per Kategori")
                 
                 df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
@@ -154,24 +150,37 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL ---
-            st.write("### 📝 Rincian Pengeluaran Detail")
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (DIKELOMPOKKAN) ---
+            st.write("### 📂 Detail Rincian per Kategori")
             
-            df_detail = df_display.copy()
-            if "Jumlah" in df_detail.columns:
-                df_detail["Jumlah"] = df_detail["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
-            
-            # Tampilkan tabel detail dengan lebar kolom yang ditentukan agar bisa di-scroll samping
-            st.dataframe(
-                df_detail, 
-                hide_index=True,
-                column_config={
-                    "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
-                    col_kategori: st.column_config.TextColumn(col_kategori, width="medium"),
-                    "Jumlah": st.column_config.TextColumn("Jumlah", width="small"),
-                    "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
-                }
-            )
+            if col_kategori in df_display.columns and not df_display.empty:
+                # Ambil daftar kategori unik dan urutkan berdasarkan total terbesarnya
+                kategori_list = df_display.groupby(col_kategori)["Jumlah"].sum().sort_values(ascending=False).index
+                
+                for kat in kategori_list:
+                    # Filter data khusus kategori ini
+                    df_sub = df_display[df_display[col_kategori] == kat].copy()
+                    sub_total = df_sub["Jumlah"].sum()
+                    
+                    # Buat menu lipat (expander) untuk tiap kategori
+                    with st.expander(f"📌 **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
+                        # Format angka Rupiah
+                        df_sub_display = df_sub.drop(columns=[col_kategori], errors="ignore")
+                        if "Jumlah" in df_sub_display.columns:
+                            df_sub_display["Jumlah"] = df_sub_display["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                        
+                        # Tampilkan tabel detail
+                        st.dataframe(
+                            df_sub_display, 
+                            hide_index=True,
+                            column_config={
+                                "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
+                                "Jumlah": st.column_config.TextColumn("Jumlah", width="small"),
+                                "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
+                            }
+                        )
+            else:
+                st.info("Belum ada rincian data untuk ditampilkan.")
             
         elif isinstance(data, list) and len(data) <= 1:
             st.info("Belum ada data pengeluaran di Google Sheets.")
