@@ -81,17 +81,35 @@ with tab2:
             data = fetch_sheet_data()
 
         if isinstance(data, list) and len(data) > 1:
-            header = data[0]
+            header = [str(col).strip() for col in data[0]] # Hapus spasi tak terlihat pada header
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
+            # Normalisasi Nama Kolom (Huruf Kecil ke Standar Utama)
+            col_map = {}
+            for c in df.columns:
+                c_clean = c.strip().lower()
+                if c_clean in ["tanggal", "tgl"]:
+                    col_map[c] = "Tanggal"
+                elif c_clean in ["kategori", "katagori"]:
+                    col_map[c] = "Kategori"
+                elif c_clean in ["jumlah", "nominal", "total"]:
+                    col_map[c] = "Jumlah"
+                elif c_clean in ["keterangan", "ket", "notes"]:
+                    col_map[c] = "Keterangan"
+            
+            df = df.rename(columns=col_map)
+            
+            # Pastikan Kolom Utama Selalu Ada
+            for req_col in ["Tanggal", "Kategori", "Jumlah", "Keterangan"]:
+                if req_col not in df.columns:
+                    df[req_col] = ""
+
             # Konversi kolom Jumlah ke angka
-            if "Jumlah" in df.columns:
-                df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
+            df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
             # Pembacaan tanggal yang fleksibel & aman
-            if "Tanggal" in df.columns:
-                df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
+            df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
@@ -210,27 +228,24 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # Deteksi nama kolom kategori
-            col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
-            
             # Label Periode Bersih
             label_periode = filter_periode.replace("-", "").strip()
             
             # 1. Total Keseluruhan
-            total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
+            total = df_display["Jumlah"].sum()
             st.metric(label=f"Total Pengeluaran ({label_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
 
             # --- 2. LAPORAN RINGKASAN PER KATEGORI ---
-            if col_kategori in df_display.columns and not df_display.empty:
+            if not df_display.empty:
                 st.write("### 🏷️ Ringkasan Total per Kategori")
                 
-                df_kat = df_display.groupby(col_kategori)["Jumlah"].sum().reset_index()
+                df_kat = df_display.groupby("Kategori")["Jumlah"].sum().reset_index()
                 df_kat = df_kat.sort_values(by="Jumlah", ascending=False)
                 
                 df_kat_formatted = df_kat.copy()
-                df_kat_formatted[col_kategori] = df_kat_formatted[col_kategori].apply(
+                df_kat_formatted["Kategori"] = df_kat_formatted["Kategori"].apply(
                     lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}"
                 )
                 df_kat_formatted["Total Pengeluaran"] = df_kat_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
@@ -245,41 +260,34 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI (TERKUNCI KOLOMNYA) ---
+            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
             st.write("### 📂 Detail Rincian per Kategori")
             
-            if col_kategori in df_display.columns and not df_display.empty:
-                kategori_list = df_display.groupby(col_kategori)["Jumlah"].sum().sort_values(ascending=False).index
+            if not df_display.empty:
+                kategori_list = df_display.groupby("Kategori")["Jumlah"].sum().sort_values(ascending=False).index
                 
                 for kat in kategori_list:
-                    df_sub = df_display[df_display[col_kategori] == kat].copy()
+                    df_sub = df_display[df_display["Kategori"] == kat].copy()
                     sub_total = df_sub["Jumlah"].sum()
                     
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        # Format angka Rupiah
-                        if "Jumlah" in df_sub.columns:
-                            df_sub["Jumlah_Formatted"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
-                        else:
-                            df_sub["Jumlah_Formatted"] = "Rp 0"
+                        # Format angka Rupiah ke kolom baru
+                        df_sub["Jumlah Display"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
-                        # Kunci kolom secara pasti
-                        col_target = ["Tanggal", "Jumlah_Formatted", "Keterangan"]
-                        
-                        # Pastikan kolom Tanggal & Keterangan selalu ada meskipun kosong
-                        if "Tanggal" not in df_sub.columns:
-                            df_sub["Tanggal"] = "-"
-                        if "Keterangan" not in df_sub.columns:
-                            df_sub["Keterangan"] = "-"
-                            
-                        # Ambil data sesuai urutan terikat
-                        df_sub_final = df_sub[col_target].rename(columns={"Jumlah_Formatted": "Jumlah"})
+                        # KUNCI MATI URUTAN KOLOM: Tanggal | Jumlah Display | Keterangan
+                        df_sub_final = pd.DataFrame({
+                            "Tanggal": df_sub["Tanggal"].fillna("-"),
+                            "Jumlah": df_sub["Jumlah Display"],
+                            "Keterangan": df_sub["Keterangan"].fillna("-")
+                        })
                         
                         # Tampilkan tabel detail
                         st.dataframe(
                             df_sub_final, 
                             hide_index=True,
+                            use_container_width=True,
                             column_config={
                                 "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
                                 "Jumlah": st.column_config.TextColumn("Jumlah", width="small"),
