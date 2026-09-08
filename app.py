@@ -55,7 +55,7 @@ with tab1:
 with tab2:
     st.subheader("Riwayat & Laporan Pengeluaran")
     
-    # Fungsi fetch data menggunakan CACHE agar ganti-ganti tanggal di Custom tidak gampang timeout
+    # Fungsi fetch data menggunakan CACHE
     @st.cache_data(ttl=120)
     def fetch_sheet_data():
         response = requests.get(WEB_APP_URL, timeout=30)
@@ -78,9 +78,9 @@ with tab2:
             if "Jumlah" in df.columns:
                 df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
-            # Buat kolom datetime internal untuk filtering
+            # Pembacaan tanggal yang fleksibel & aman dari error format
             if "Tanggal" in df.columns:
-                df["_dt"] = pd.to_datetime(df["Tanggal"], errors="coerce")
+                df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
             filter_periode = st.selectbox(
                 "📅 Pilih Periode Tampilan:",
@@ -90,16 +90,19 @@ with tab2:
             wib = pytz.timezone('Asia/Jakarta')
             now = datetime.now(wib)
             
-            if filter_periode == "Bulan Ini" and "_dt" in df.columns:
+            # Pengecekan jika konversi tanggal berhasil (tidak kosong semua)
+            has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
+            
+            if filter_periode == "Bulan Ini" and has_valid_dt:
                 df_filtered = df[(df["_dt"].dt.month == now.month) & (df["_dt"].dt.year == now.year)].copy()
             
-            elif filter_periode == "Minggu Ini" and "_dt" in df.columns:
+            elif filter_periode == "Minggu Ini" and has_valid_dt:
+                # Memfilter 7 hari terakhir atau minggu ISO berjalan
                 current_year, current_week, _ = now.isocalendar()
                 iso_cal = df["_dt"].dt.isocalendar()
                 df_filtered = df[(iso_cal.week == current_week) & (iso_cal.year == current_year)].copy()
             
-            elif filter_periode == "Custom (Rentang Tanggal)" and "_dt" in df.columns:
-                # Menggunakan date_input rentang tunggal agar lebih rapi & stabil
+            elif filter_periode == "Custom (Rentang Tanggal)" and has_valid_dt:
                 range_tgl = st.date_input(
                     "Pilih Rentang Tanggal (Mulai - Selesai):",
                     value=(datetime.now(), datetime.now()),
@@ -120,7 +123,7 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
-            # 1. Total Keseluruhan
+            # 1. Total Keseluruhan berdasarkan periode yang terfilter
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
@@ -161,7 +164,7 @@ with tab2:
             # --- 3. RINCIAN PENGELUARAN DETAIL ---
             st.write("### 📝 Rincian Pengeluaran")
             
-            # Tampilkan tabel detail tanpa indeks (disabled=True agar mulus di-swipe di HP)
+            # Tampilkan tabel detail
             st.data_editor(
                 df_display, 
                 use_container_width=True, 
