@@ -121,20 +121,21 @@ with tab2:
             # Hapus kolom bantuan _dt
             df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
             
+            # KUNCI URUTAN KOLOM AGAR TIDAK BERUBAH-UBAH
+            col_kategori = "Katagori" if "Katagori" in df_display.columns else "Kategori"
+            target_order = ["Tanggal", col_kategori, "Jumlah", "Keterangan"]
+            existing_cols = [c for c in target_order if c in df_display.columns]
+            other_cols = [c for c in df_display.columns if c not in existing_cols]
+            df_display = df_display[existing_cols + other_cols]
+            
             # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if "Jumlah" in df_display.columns else 0
             st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
             
             st.divider()
 
-            # --- 2. LAPORAN PER KATEGORI (HANYA TABEL, DIURUTKAN DARI TERBESAR) ---
-            col_kategori = None
-            if "Katagori" in df_display.columns:
-                col_kategori = "Katagori"
-            elif "Kategori" in df_display.columns:
-                col_kategori = "Kategori"
-
-            if col_kategori and not df_display.empty:
+            # --- 2. LAPORAN PER KATEGORI ---
+            if col_kategori in df_display.columns and not df_display.empty:
                 st.write("### 🏷️ Total per Kategori (Terbesar - Terkecil)")
                 
                 # Mengelompokkan total pengeluaran per kategori & urutkan dari terbesar
@@ -159,9 +160,14 @@ with tab2:
             # --- 3. RINCIAN PENGELUARAN DETAIL ---
             st.write("### 📝 Rincian Pengeluaran Detail")
             
+            # Format kolom Jumlah menjadi tampilan rupiah untuk tabel detail
+            df_detail = df_display.copy()
+            if "Jumlah" in df_detail.columns:
+                df_detail["Jumlah"] = df_detail["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+            
             # Tampilkan tabel detail
             st.data_editor(
-                df_display, 
+                df_detail, 
                 use_container_width=True, 
                 hide_index=True,
                 disabled=True
