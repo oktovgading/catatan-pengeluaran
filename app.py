@@ -82,7 +82,7 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Normalisasi Kolom
+            # Normalisasi Nama Kolom (Mengantisipasi Typo Katagori / Kategori)
             col_map = {}
             for c in df.columns:
                 c_clean = c.strip().lower()
@@ -97,6 +97,7 @@ with tab2:
             
             df = df.rename(columns=col_map)
             
+            # Pastikan 4 kolom utama wajib ada
             for req_col in ["Tanggal", "Kategori", "Jumlah", "Keterangan"]:
                 if req_col not in df.columns:
                     df[req_col] = ""
@@ -243,11 +244,12 @@ with tab2:
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
-                        df_sub["Jumlah"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                        df_sub_formatted = df_sub.copy()
+                        df_sub_formatted["Jumlah"] = df_sub_formatted["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
-                        # Urutan konsisten: Tanggal -> Jumlah -> Keterangan
+                        # KUNCI URUTAN KONSISTEN: Tanggal -> Jumlah -> Keterangan
                         target_columns = ["Tanggal", "Jumlah", "Keterangan"]
-                        df_sub_final = df_sub.reindex(columns=target_columns).fillna("-")
+                        df_sub_final = df_sub_formatted.reindex(columns=target_columns).fillna("-")
                         
                         st.dataframe(
                             df_sub_final, 
