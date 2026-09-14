@@ -145,10 +145,8 @@ with tab2:
                 df["_only_date"] = df["_dt"].dt.date
                 
                 if filter_periode == str_curr:
-                    # Murni Murni Mengikuti Rentang Bulan Ini tanpa Terpotong Tutup Buku
                     df_filtered = df[(df["_only_date"] >= tgl_curr_start) & (df["_only_date"] <= tgl_curr_end)].copy()
                 elif filter_periode == str_last:
-                    # Murni Mengikuti Rentang Bulan Lalu
                     df_filtered = df[(df["_only_date"] >= tgl_last_start) & (df["_only_date"] <= tgl_last_end)].copy()
                 elif filter_periode == "Custom (Pilih Rentang Tanggal Bebas)":
                     range_tgl = st.date_input(
@@ -162,7 +160,6 @@ with tab2:
                     else:
                         df_filtered = df.copy()
                 else: # Opsi "Semua"
-                    # Fitur Tutup Buku HANYA MEMOTONG DATA SAAT MEMILIH OPSI "SEMUA"
                     if use_tutup_buku:
                         df_filtered = df[df["_only_date"] >= tgl_tutup_buku].copy()
                     else:
@@ -178,6 +175,11 @@ with tab2:
             
             st.divider()
 
+            # Pengaturan Lebar Kolom agar Keterangan Tampil Luas
+            custom_column_config = {
+                "Keterangan": st.column_config.TextColumn("Keterangan", width="large")
+            }
+
             # --- TRANSAKSI TERAKHIR ---
             if not df_display.empty:
                 st.write("### 🕒 Transaksi Terakhir (Terbaru)")
@@ -191,6 +193,7 @@ with tab2:
                 
                 st.dataframe(
                     df_recent_final,
+                    column_config=custom_column_config,
                     hide_index=True,
                     use_container_width=True
                 )
@@ -237,6 +240,7 @@ with tab2:
                         
                         st.dataframe(
                             df_sub_final, 
+                            column_config=custom_column_config,
                             hide_index=True,
                             use_container_width=True
                         )
