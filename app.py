@@ -175,8 +175,17 @@ with tab2:
             
             st.divider()
 
-            # Pengaturan Lebar Kolom agar Keterangan Tampil Luas
-            custom_column_config = {
+            # Pengaturan Konfigurasi Kolom + Kunci Kolom Utama (pinned="left")
+            config_terakhir = {
+                "Tanggal": st.column_config.TextColumn("Tanggal", pinned="left", width="medium"),
+                "Kategori": st.column_config.TextColumn("Kategori", pinned="left", width="medium"),
+                "Jumlah": st.column_config.TextColumn("Jumlah", pinned="left", width="medium"),
+                "Keterangan": st.column_config.TextColumn("Keterangan", width="large")
+            }
+
+            config_detail = {
+                "Tanggal": st.column_config.TextColumn("Tanggal", pinned="left", width="medium"),
+                "Jumlah": st.column_config.TextColumn("Jumlah", pinned="left", width="medium"),
                 "Keterangan": st.column_config.TextColumn("Keterangan", width="large")
             }
 
@@ -193,7 +202,7 @@ with tab2:
                 
                 st.dataframe(
                     df_recent_final,
-                    column_config=custom_column_config,
+                    column_config=config_terakhir,
                     hide_index=True,
                     use_container_width=True
                 )
@@ -240,7 +249,7 @@ with tab2:
                         
                         st.dataframe(
                             df_sub_final, 
-                            column_config=custom_column_config,
+                            column_config=config_detail,
                             hide_index=True,
                             use_container_width=True
                         )
