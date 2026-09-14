@@ -175,17 +175,17 @@ with tab2:
             
             st.divider()
 
-            # Pengaturan Konfigurasi Kolom + Kunci Kolom Utama (pinned="left")
+            # --- KONFIGURASI TAMPILAN LEBAR KOLOM ---
             config_terakhir = {
-                "Tanggal": st.column_config.TextColumn("Tanggal", pinned="left", width="medium"),
-                "Kategori": st.column_config.TextColumn("Kategori", pinned="left", width="medium"),
-                "Jumlah": st.column_config.TextColumn("Jumlah", pinned="left", width="medium"),
+                "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
+                "Kategori": st.column_config.TextColumn("Kategori", width="medium"),
+                "Jumlah": st.column_config.TextColumn("Jumlah", width="medium"),
                 "Keterangan": st.column_config.TextColumn("Keterangan", width="large")
             }
 
             config_detail = {
-                "Tanggal": st.column_config.TextColumn("Tanggal", pinned="left", width="medium"),
-                "Jumlah": st.column_config.TextColumn("Jumlah", pinned="left", width="medium"),
+                "Tanggal": st.column_config.TextColumn("Tanggal", width="medium"),
+                "Jumlah": st.column_config.TextColumn("Jumlah", width="medium"),
                 "Keterangan": st.column_config.TextColumn("Keterangan", width="large")
             }
 
@@ -197,6 +197,7 @@ with tab2:
                 df_recent["Jumlah"] = df_recent["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                 df_recent["Kategori"] = df_recent["Kategori"].apply(lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}")
                 
+                # Urutan: Tanggal -> Kategori -> Jumlah -> Keterangan
                 recent_cols = ["Tanggal", "Kategori", "Jumlah", "Keterangan"]
                 df_recent_final = df_recent.reindex(columns=recent_cols).fillna("-")
                 
@@ -244,6 +245,7 @@ with tab2:
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
                         df_sub["Jumlah"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
+                        # Urutan konsisten: Tanggal -> Jumlah -> Keterangan
                         target_columns = ["Tanggal", "Jumlah", "Keterangan"]
                         df_sub_final = df_sub.reindex(columns=target_columns).fillna("-")
                         
