@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 import pytz
 
-# URL Web App Google Apps Script Baru Anda
+# URL Web App Google Apps Script Anda
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyxpOXOkt9jgMtr9q8S8zVbfUwyVLGTpxmCoBj9YieZMt1IBhQHrUM7JEa4EEqStTCj/exec"
 
 st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="centered")
@@ -123,12 +123,9 @@ with tab2:
                 
                 st.divider()
                 use_tutup_buku = st.checkbox("🔒 Aktifkan Tutup Buku (Sembunyikan data lama saat klik 'Semua')")
-                tgl_tutup_buku = date(2026, 8, 26)
+                tgl_tutup_buku = date(2026, 8, 31)
                 if use_tutup_buku:
-                    tgl_tutup_buku = st.date_input("Sembunyikan Data Sebelum Tanggal Ini:", value=date(2026, 8, 26))
-
-            if use_tutup_buku and "_dt" in df.columns:
-                df = df[df["_dt"].dt.date >= tgl_tutup_buku].copy()
+                    tgl_tutup_buku = st.date_input("Sembunyikan Data Sebelum Tanggal Ini (Hanya untuk Opsi 'Semua'):", value=date(2026, 8, 31))
 
             str_curr = f"Bulan Ini ({tgl_curr_start.strftime('%d %b')} - {tgl_curr_end.strftime('%d %b %Y')})"
             str_last = f"Bulan Lalu ({tgl_last_start.strftime('%d %b')} - {tgl_last_end.strftime('%d %b %Y')})"
@@ -148,8 +145,10 @@ with tab2:
                 df["_only_date"] = df["_dt"].dt.date
                 
                 if filter_periode == str_curr:
+                    # Murni Murni Mengikuti Rentang Bulan Ini tanpa Terpotong Tutup Buku
                     df_filtered = df[(df["_only_date"] >= tgl_curr_start) & (df["_only_date"] <= tgl_curr_end)].copy()
                 elif filter_periode == str_last:
+                    # Murni Mengikuti Rentang Bulan Lalu
                     df_filtered = df[(df["_only_date"] >= tgl_last_start) & (df["_only_date"] <= tgl_last_end)].copy()
                 elif filter_periode == "Custom (Pilih Rentang Tanggal Bebas)":
                     range_tgl = st.date_input(
@@ -162,8 +161,12 @@ with tab2:
                         df_filtered = df[(df["_only_date"] >= tgl_m) & (df["_only_date"] <= tgl_s)].copy()
                     else:
                         df_filtered = df.copy()
-                else:
-                    df_filtered = df.copy()
+                else: # Opsi "Semua"
+                    # Fitur Tutup Buku HANYA MEMOTONG DATA SAAT MEMILIH OPSI "SEMUA"
+                    if use_tutup_buku:
+                        df_filtered = df[df["_only_date"] >= tgl_tutup_buku].copy()
+                    else:
+                        df_filtered = df.copy()
             else:
                 df_filtered = df.copy()
             
