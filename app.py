@@ -1,8 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
-import calendar
+from datetime import datetime, date, timedelta
 import pytz
 
 # URL Web App Google Apps Script Anda
@@ -85,7 +84,7 @@ with tab2:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Normalisasi Nama Kolom (Huruf Kecil ke Standar Utama)
+            # Normalisasi Nama Kolom
             col_map = {}
             for c in df.columns:
                 c_clean = c.strip().lower()
@@ -110,23 +109,97 @@ with tab2:
             
             # Pembacaan tanggal yang fleksibel & aman
             df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
+
+            # --- MENU PENGATURAN TANGGAL GAJIAN / CUT-OFF (MANUAL & DINAMIS) ---
+            with st.expander("⚙️ **Atur Tanggal Gajian / Cut-off Siklus Laporan**", expanded=False):
+                st.write("Atur tanggal gajiam/cut-off sesuai kondisi bulan ini:")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    tgl_curr_start = st.date_input("Mulai Bulan Ini (Gajian)", value=date(2026, 8, 28))
+                    tgl_curr_end = st.date_input("Sampai Tanggal", value=date(2026, 9, 25))
+                with col2:
+                    tgl_last_start = st.date_input("Mulai Bulan Lalu", value=date(2026, 7, 28))
+                    tgl_last_end = st.date_input("Sampai Tanggal (Bulan Lalu)", value=date(2026, 8, 27))
+                
+                st.divider()
+                use_tutup_buku = st.checkbox("🔒 Aktifkan Tutup Buku (Sembunyikan data lama saat klik 'Semua')")
+                tgl_tutup_buku = date(2026, 8, 28)
+                if use_tutup_buku:
+                    tgl_tutup_buku = st.date_input("Sembunyikan Data Sebelum Tanggal Ini:", value=date(2026, 8, 28))
+
+            # Filter Tutup Buku Permanen untuk seluruh laporan jika diaktifkan
+            if use_tutup_buku and "_dt" in df.columns:
+                df = df[df["_dt"] >= pd.to_datetime(tgl_tutup_buku)].copy()
+
+            # Label Opsi Dropdown
+            str_curr = f"Bulan Ini ({tgl_curr_start.strftime('%d %b')} - {tgl_curr_end.strftime('%d %b %Y')})"
+            str_last = f"Bulan Lalu ({tgl_last_start.strftime('%d %b')} - {tgl_last_end.strftime('%d %b %Y')})"
+
+            # Opsi Pilihan Periode
+            filter_options = [
+                "Semua", 
+                str_curr, 
+                str_last, 
+                "Custom (Pilih Rentang Tanggal Bebas)"
+            ]
             
-            # --- BAGIAN 0: TAMPILKAN TRANSAKSI TERBARU (5 TERAKHIR) ---
-            st.write("### 🕒 Transaksi Terbaru (5 Terakhir)")
-            df_recent = df.copy()
-            if "_dt" in df_recent.columns and df_recent["_dt"].notnull().any():
-                df_recent = df_recent.sort_values(by="_dt", ascending=False)
+            filter_periode = st.selectbox("📅 Pilih Periode Laporan:", filter_options)
             
-            df_recent_top5 = df_recent.head(5).copy()
-            if not df_recent_top5.empty:
-                df_recent_top5["Jumlah"] = df_recent_top5["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
-                df_recent_top5["Kategori"] = df_recent_top5["Kategori"].apply(
-                    lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}"
-                )
-                df_recent_display = df_recent_top5.reindex(columns=["Tanggal", "Kategori", "Jumlah", "Keterangan"]).fillna("-")
+            has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
+            
+            # Logika Pemfilteran Berdasarkan Pilihan Dropdown
+            if has_valid_dt:
+                if filter_periode == str_curr:
+                    start_dt = pd.to_datetime(tgl_curr_start)
+                    end_dt = pd.to_datetime(tgl_curr_end).replace(hour=23, minute=59, second=59)
+                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                elif filter_periode == str_last:
+                    start_dt = pd.to_datetime(tgl_last_start)
+                    end_dt = pd.to_datetime(tgl_last_end).replace(hour=23, minute=59, second=59)
+                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                elif filter_periode == "Custom (Pilih Rentang Tanggal Bebas)":
+                    range_tgl = st.date_input(
+                        "Pilih Rentang Tanggal (Mulai - Selesai):",
+                        value=(datetime.now(), datetime.now()),
+                        key="custom_range"
+                    )
+                    
+                    if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
+                        tgl_m, tgl_s = range_tgl
+                        start_dt = pd.to_datetime(tgl_m)
+                        end_dt = pd.to_datetime(tgl_s).replace(hour=23, minute=59, second=59)
+                        df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                    else:
+                        df_filtered = df.copy()
+                else:
+                    df_filtered = df.copy()
+            else:
+                df_filtered = df.copy()
+            
+            # Hapus kolom bantuan _dt
+            df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
+            
+            # 1. Total Keseluruhan
+            total = df_display["Jumlah"].sum() if not df_display.empty else 0
+            st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
+            
+            st.divider()
+
+            # --- 2. TRANSAKSI TERAKHIR (TERBARU) ---
+            if not df_display.empty:
+                st.write("### 🕒 Transaksi Terakhir (Terbaru)")
+                
+                # Ambil 5 data paling baru
+                df_recent = df_display.tail(5).iloc[::-1].copy()
+                df_recent["Jumlah"] = df_recent["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
+                df_recent["Kategori"] = df_recent["Kategori"].apply(lambda x: f"{ICON_KATEGORI.get(x, '📌')} {x}")
+                
+                recent_cols = ["Tanggal", "Kategori", "Jumlah", "Keterangan"]
+                df_recent_final = df_recent.reindex(columns=recent_cols).fillna("-")
                 
                 st.dataframe(
-                    df_recent_display, 
+                    df_recent_final,
                     hide_index=True,
                     use_container_width=True,
                     column_config={
@@ -136,125 +209,10 @@ with tab2:
                         "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
                     }
                 )
-            st.divider()
+                
+                st.divider()
 
-            # --- PERHITUNGAN TANGGAL & HARI PERIODE ---
-            wib = pytz.timezone('Asia/Jakarta')
-            now = datetime.now(wib)
-            
-            current_month = now.month
-            current_year = now.year
-            
-            if current_month == 1:
-                last_month = 12
-                last_month_year = current_year - 1
-            else:
-                last_month = current_month - 1
-                last_month_year = current_year
-                
-            nama_bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"]
-            curr_month_str = nama_bulan[current_month - 1]
-            last_month_str = nama_bulan[last_month - 1]
-            
-            days_in_curr_month = calendar.monthrange(current_year, current_month)[1]
-            days_in_last_month = calendar.monthrange(last_month_year, last_month)[1]
-            
-            opt_m1_curr = f"Minggu ke-1 (1 - 7 {curr_month_str})"
-            opt_m2_curr = f"Minggu ke-2 (8 - 14 {curr_month_str})"
-            opt_m3_curr = f"Minggu ke-3 (15 - 21 {curr_month_str})"
-            opt_m4_curr = f"Minggu ke-4 (22 - 28 {curr_month_str})"
-            opt_m5_curr = f"Minggu ke-5 (29 - {days_in_curr_month} {curr_month_str})"
-            
-            opt_m1_last = f"Minggu ke-1 (1 - 7 {last_month_str})"
-            opt_m2_last = f"Minggu ke-2 (8 - 14 {last_month_str})"
-            opt_m3_last = f"Minggu ke-3 (15 - 21 {last_month_str})"
-            opt_m4_last = f"Minggu ke-4 (22 - 28 {last_month_str})"
-            opt_m5_last = f"Minggu ke-5 (29 - {days_in_last_month} {last_month_str})"
-            
-            filter_options = [
-                "Semua", 
-                "--- BULAN INI ---",
-                f"Bulan Ini ({curr_month_str} {current_year})", 
-                opt_m1_curr, 
-                opt_m2_curr, 
-                opt_m3_curr, 
-                opt_m4_curr, 
-                opt_m5_curr, 
-                "--- BULAN LALU ---",
-                f"Bulan Lalu ({last_month_str} {last_month_year})", 
-                opt_m1_last, 
-                opt_m2_last, 
-                opt_m3_last, 
-                opt_m4_last, 
-                opt_m5_last, 
-                "--- CUSTOM ---",
-                "Custom (Rentang Tanggal)"
-            ]
-            
-            filter_periode = st.selectbox("📅 Pilih Periode Laporan:", filter_options)
-            
-            has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
-            
-            # Logika Pemfilteran Laporan
-            if has_valid_dt:
-                is_bulan_ini = (df["_dt"].dt.month == current_month) & (df["_dt"].dt.year == current_year)
-                is_bulan_lalu = (df["_dt"].dt.month == last_month) & (df["_dt"].dt.year == last_month_year)
-                
-                if filter_periode == f"Bulan Ini ({curr_month_str} {current_year})":
-                    df_filtered = df[is_bulan_ini].copy()
-                elif filter_periode == opt_m1_curr:
-                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
-                elif filter_periode == opt_m2_curr:
-                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
-                elif filter_periode == opt_m3_curr:
-                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
-                elif filter_periode == opt_m4_curr:
-                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
-                elif filter_periode == opt_m5_curr:
-                    df_filtered = df[is_bulan_ini & (df["_dt"].dt.day >= 29)].copy()
-                
-                elif filter_periode == f"Bulan Lalu ({last_month_str} {last_month_year})":
-                    df_filtered = df[is_bulan_lalu].copy()
-                elif filter_periode == opt_m1_last:
-                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 1) & (df["_dt"].dt.day <= 7)].copy()
-                elif filter_periode == opt_m2_last:
-                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 8) & (df["_dt"].dt.day <= 14)].copy()
-                elif filter_periode == opt_m3_last:
-                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 15) & (df["_dt"].dt.day <= 21)].copy()
-                elif filter_periode == opt_m4_last:
-                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 22) & (df["_dt"].dt.day <= 28)].copy()
-                elif filter_periode == opt_m5_last:
-                    df_filtered = df[is_bulan_lalu & (df["_dt"].dt.day >= 29)].copy()
-                
-                elif filter_periode == "Custom (Rentang Tanggal)":
-                    range_tgl = st.date_input(
-                        "Pilih Rentang Tanggal (Mulai - Selesai):",
-                        value=(datetime.now(), datetime.now()),
-                        key="custom_range"
-                    )
-                    
-                    if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
-                        tgl_mulai, tgl_selesai = range_tgl
-                        start_dt = pd.to_datetime(tgl_mulai)
-                        end_dt = pd.to_datetime(tgl_selesai).replace(hour=23, minute=59, second=59)
-                        df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
-                    else:
-                        df_filtered = df.copy()
-                else:
-                    df_filtered = df.copy()
-            else:
-                df_filtered = df.copy()
-            
-            df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
-            label_periode = filter_periode.replace("-", "").strip()
-            
-            # --- 1. TOTAL KESELURUHAN PERIODE ---
-            total = df_display["Jumlah"].sum()
-            st.metric(label=f"Total Pengeluaran ({label_periode})", value=f"Rp {total:,.0f}")
-            
-            st.divider()
-
-            # --- 2. LAPORAN RINGKASAN PER KATEGORI ---
+            # --- 3. LAPORAN RINGKASAN PER KATEGORI ---
             if not df_display.empty:
                 st.write("### 🏷️ Ringkasan Total per Kategori")
                 
@@ -277,7 +235,7 @@ with tab2:
                 
                 st.divider()
 
-            # --- 3. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
+            # --- 4. RINCIAN PENGELUARAN DETAIL PER KATEGORI ---
             st.write("### 📂 Detail Rincian per Kategori")
             
             if not df_display.empty:
@@ -290,11 +248,14 @@ with tab2:
                     icon = ICON_KATEGORI.get(kat, "📌")
                     
                     with st.expander(f"{icon} **{kat}** — Total: Rp {sub_total:,.0f} ({len(df_sub)} transaksi)"):
+                        # Format Angka Rupiah
                         df_sub["Jumlah"] = df_sub["Jumlah"].apply(lambda x: f"Rp {x:,.0f}")
                         
+                        # Kunci Urutan Kolom Terikat: Tanggal, Jumlah, Keterangan
                         target_columns = ["Tanggal", "Jumlah", "Keterangan"]
                         df_sub_final = df_sub.reindex(columns=target_columns).fillna("-")
                         
+                        # Tampilkan tabel detail
                         st.dataframe(
                             df_sub_final, 
                             hide_index=True,
