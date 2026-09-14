@@ -107,30 +107,35 @@ with tab2:
             # Konversi kolom Jumlah ke angka
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
             
-            # Pembacaan tanggal yang fleksibel & aman
+            # Conversion Tanggal Tingkat Lanjut (Mendukung Multi-Format)
             df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
+            
+            # Jika ada yang NaT (Gagal parsing), coba ambil bagian tanggal saja (YYYY-MM-DD)
+            if df["_dt"].isnull().any():
+                df_str_date = df["Tanggal"].astype(str).str.extract(r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})')[0]
+                df["_dt"] = df["_dt"].fillna(pd.to_datetime(df_str_date, errors="coerce"))
 
-            # --- MENU PENGATURAN TANGGAL GAJIAN / CUT-OFF (MANUAL & DINAMIS) ---
+            # --- MENU PENGATURAN TANGGAL GAJIAN / CUT-OFF ---
             with st.expander("⚙️ **Atur Tanggal Gajian / Cut-off Siklus Laporan**", expanded=False):
-                st.write("Atur tanggal gajiam/cut-off sesuai kondisi bulan ini:")
+                st.write("Atur tanggal gajian/cut-off sesuai kondisi bulan ini:")
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    tgl_curr_start = st.date_input("Mulai Bulan Ini (Gajian)", value=date(2026, 8, 28))
+                    tgl_curr_start = st.date_input("Mulai Bulan Ini (Gajian)", value=date(2026, 8, 26))
                     tgl_curr_end = st.date_input("Sampai Tanggal", value=date(2026, 9, 25))
                 with col2:
                     tgl_last_start = st.date_input("Mulai Bulan Lalu", value=date(2026, 7, 28))
-                    tgl_last_end = st.date_input("Sampai Tanggal (Bulan Lalu)", value=date(2026, 8, 27))
+                    tgl_last_end = st.date_input("Sampai Tanggal (Bulan Lalu)", value=date(2026, 8, 25))
                 
                 st.divider()
                 use_tutup_buku = st.checkbox("🔒 Aktifkan Tutup Buku (Sembunyikan data lama saat klik 'Semua')")
-                tgl_tutup_buku = date(2026, 8, 28)
+                tgl_tutup_buku = date(2026, 8, 26)
                 if use_tutup_buku:
-                    tgl_tutup_buku = st.date_input("Sembunyikan Data Sebelum Tanggal Ini:", value=date(2026, 8, 28))
+                    tgl_tutup_buku = st.date_input("Sembunyikan Data Sebelum Tanggal Ini:", value=date(2026, 8, 26))
 
             # Filter Tutup Buku Permanen untuk seluruh laporan jika diaktifkan
             if use_tutup_buku and "_dt" in df.columns:
-                df = df[df["_dt"] >= pd.to_datetime(tgl_tutup_buku)].copy()
+                df = df[df["_dt"].dt.date >= tgl_tutup_buku].copy()
 
             # Label Opsi Dropdown
             str_curr = f"Bulan Ini ({tgl_curr_start.strftime('%d %b')} - {tgl_curr_end.strftime('%d %b %Y')})"
@@ -148,28 +153,24 @@ with tab2:
             
             has_valid_dt = "_dt" in df.columns and df["_dt"].notnull().any()
             
-            # Logika Pemfilteran Berdasarkan Pilihan Dropdown
+            # Logika Pemfilteran Tanggal Sederhana & Aman (Tanggal vs Tanggal)
             if has_valid_dt:
+                df["_only_date"] = df["_dt"].dt.date
+                
                 if filter_periode == str_curr:
-                    start_dt = pd.to_datetime(tgl_curr_start)
-                    end_dt = pd.to_datetime(tgl_curr_end).replace(hour=23, minute=59, second=59)
-                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                    df_filtered = df[(df["_only_date"] >= tgl_curr_start) & (df["_only_date"] <= tgl_curr_end)].copy()
                 elif filter_periode == str_last:
-                    start_dt = pd.to_datetime(tgl_last_start)
-                    end_dt = pd.to_datetime(tgl_last_end).replace(hour=23, minute=59, second=59)
-                    df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                    df_filtered = df[(df["_only_date"] >= tgl_last_start) & (df["_only_date"] <= tgl_last_end)].copy()
                 elif filter_periode == "Custom (Pilih Rentang Tanggal Bebas)":
                     range_tgl = st.date_input(
                         "Pilih Rentang Tanggal (Mulai - Selesai):",
-                        value=(datetime.now(), datetime.now()),
+                        value=(datetime.now().date(), datetime.now().date()),
                         key="custom_range"
                     )
                     
                     if isinstance(range_tgl, tuple) and len(range_tgl) == 2:
                         tgl_m, tgl_s = range_tgl
-                        start_dt = pd.to_datetime(tgl_m)
-                        end_dt = pd.to_datetime(tgl_s).replace(hour=23, minute=59, second=59)
-                        df_filtered = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt)].copy()
+                        df_filtered = df[(df["_only_date"] >= tgl_m) & (df["_only_date"] <= tgl_s)].copy()
                     else:
                         df_filtered = df.copy()
                 else:
@@ -177,8 +178,8 @@ with tab2:
             else:
                 df_filtered = df.copy()
             
-            # Hapus kolom bantuan _dt
-            df_display = df_filtered.drop(columns=["_dt"], errors="ignore")
+            # Hapus kolom bantuan
+            df_display = df_filtered.drop(columns=["_dt", "_only_date"], errors="ignore")
             
             # 1. Total Keseluruhan
             total = df_display["Jumlah"].sum() if not df_display.empty else 0
