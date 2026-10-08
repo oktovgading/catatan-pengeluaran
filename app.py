@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxkdQpvVCGqHcqwOgyia8lMVi4LcSQarP38GlI1CK5x77CszUsBjOZrQdabHu2Sndj6/exec"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxah4yxJq454RdKvmlqHoC5Os6S-eImlpptn3bjwTY5nOhdDosqo8Ivf1fXQPums5bX/exec"
 
 st.set_page_config(page_title="Catatan Pengeluaran", page_icon="💰", layout="centered")
 st.title("💰 Catatan Pengeluaran")
@@ -75,12 +75,12 @@ with tab2:
 
     # --- MENU KLIK TUTUP BUKU (GAJIAN) ---
     with st.expander("⚙️ **Atur / Klik Tutup Buku (Gajian)**"):
-        st.write("Klik tombol di bawah saat gajian. Data sebelum jam/tanggal tutup buku akan masuk ke **Bulan Lalu/Arsip**, dan transaksi setelahnya masuk ke **Bulan Ini**.")
+        st.write("Klik tombol di bawah saat gajian untuk menyelesaikan periode saat ini dan membuat arsip laporan baru.")
         if st.button("🔒 Tutup Buku Sekarang", type="primary"):
             try:
                 res = requests.post(WEB_APP_URL, json={"action": "tutup_buku"}, timeout=15)
                 if res.status_code == 200:
-                    st.success("✅ Tutup buku berhasil! Cut-off periode baru telah dibuat.")
+                    st.success("✅ Tutup buku berhasil! Periode baru telah dibuat.")
                     st.cache_data.clear()
                     st.rerun()
                 else:
@@ -94,7 +94,7 @@ with tab2:
         with st.spinner("Mengambil data..."):
             res_json = fetch_sheet_data()
             raw_data = res_json.get("data", [])
-            last_cutoff_str = res_json.get("last_cutoff", "")
+            cutoffs = res_json.get("cutoffs", [])
 
         if isinstance(raw_data, list) and len(raw_data) > 1:
             header = [str(col).strip() for col in raw_data[0]]
@@ -116,39 +116,48 @@ with tab2:
             
             df = df.rename(columns=col_map)
             df["Jumlah"] = pd.to_numeric(df["Jumlah"], errors="coerce").fillna(0)
-            
-            # Convert Tanggal Transaksi ke Format Datetime
             df["_dt"] = pd.to_datetime(df["Tanggal"], format="mixed", errors="coerce")
             
-            # Filter berdasarkan Tanggal Cut-off
-            if last_cutoff_str:
-                cutoff_dt = pd.to_datetime(last_cutoff_str, errors="coerce")
-                df_bulan_lalu = df[df["_dt"] <= cutoff_dt].copy()
-                df_bulan_ini = df[df["_dt"] > cutoff_dt].copy()
-            else:
-                # Jika belum pernah Tutup Buku, SEMUA data dianggap Periode Sekarang (Bulan Lalu 0)
-                df_bulan_ini = df.copy()
-                df_bulan_lalu = pd.DataFrame(columns=df.columns)
+            # URUTKAN CUTOFF TANGGAL
+            cutoff_dts = sorted([pd.to_datetime(c, errors="coerce") for c in cutoffs if c])
+            cutoff_dts = [c for c in cutoff_dts if pd.notnull(c)]
 
-            filter_options = [
-                "Bulan Ini / Periode Aktif",
-                "Bulan Lalu / Arsip",
-                "Semua Data (Tanpa Filter Cut-off)"
-            ]
+            # MEMBENTUK OPSI APLIKASI UNTUK PERIODE BERBEDA
+            periode_dict = {}
             
-            filter_periode = st.selectbox("📅 Pilih Laporan Periode:", filter_options)
-            
-            if filter_periode == "Bulan Ini / Periode Aktif":
-                df_display = df_bulan_ini.copy()
-            elif filter_periode == "Bulan Lalu / Arsip":
-                df_display = df_bulan_lalu.copy()
+            if not cutoff_dts:
+                periode_dict["🟢 Periode Aktif (Semua Data)"] = df.copy()
             else:
-                df_display = df.copy()
+                # 1. Periode Awal (Sebelum Cutoff Pertama)
+                df_awal = df[df["_dt"] <= cutoff_dts[0]].copy()
+                lbl_awal = f"📁 Arsip s.d. {cutoff_dts[0].strftime('%d %b %Y')}"
+                periode_dict[lbl_awal] = df_awal
 
+                # 2. Periode Antar Cutoff (Bulan Lalu, Bulan Lalu Lagi, Dst.)
+                for i in range(len(cutoff_dts) - 1):
+                    start = cutoff_dts[i]
+                    end = cutoff_dts[i+1]
+                    df_mid = df[(df["_dt"] > start) & (df["_dt"] <= end)].copy()
+                    lbl_mid = f"📁 Arsip ({start.strftime('%d %b')} - {end.strftime('%d %b %Y')})"
+                    periode_dict[lbl_mid] = df_mid
+
+                # 3. Periode Aktif Sekarang
+                df_aktif = df[df["_dt"] > cutoff_dts[-1]].copy()
+                lbl_aktif = f"🟢 Periode Aktif (Sejak {cutoff_dts[-1].strftime('%d %b %Y')})"
+                periode_dict[lbl_aktif] = df_aktif
+
+            periode_dict["📋 Semua Data (Tanpa Filter)"] = df.copy()
+
+            options = list(periode_dict.keys())
+            default_index = len(options) - 2 if len(options) > 2 else 0
+            
+            selected_option = st.selectbox("📅 Pilih Laporan Periode:", options, index=default_index)
+            
+            df_display = periode_dict[selected_option]
             df_display = df_display.drop(columns=["_dt"], errors="ignore")
 
             total = df_display["Jumlah"].sum() if not df_display.empty else 0
-            st.metric(label=f"Total Pengeluaran ({filter_periode})", value=f"Rp {total:,.0f}")
+            st.metric(label=f"Total Pengeluaran ({selected_option})", value=f"Rp {total:,.0f}")
             
             st.divider()
 
@@ -190,7 +199,7 @@ with tab2:
                 st.dataframe(df_kat_formatted, hide_index=True, use_container_width=True)
                 st.divider()
 
-            # Detail Rincian (Urutan: Tanggal -> Jumlah -> Keterangan)
+            # Detail Rincian
             st.write("### 📂 Detail Rincian per Kategori")
             if not df_display.empty:
                 kategori_list = df_display.groupby("Kategori")["Jumlah"].sum().sort_values(ascending=False).index
